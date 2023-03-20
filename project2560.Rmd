@@ -1,0 +1,211 @@
+---
+title: "Project 2 560"
+author: "William Froelich"
+date: "2023-03-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+knitr::opts_knit$set(root.dir = normalizePath("C:/Users/Epic/Desktop/TBAN560"))
+```
+
+
+```{r}
+#load the mlbench package which has the BreastCancer data set
+require(mlbench)
+```
+
+```{r}
+# if you don't have any required package, use the install.packages() command
+# load the data set
+data(BreastCancer)
+ls(BreastCancer)
+```
+```{r}
+# some algorithms don't like missing values, so remove rows with missing values
+BreastCancer <- na.omit(BreastCancer) 
+```
+
+
+```{r}
+# remove the unique identifier, which is useless and would confuse the machine learning algorithms
+BreastCancer$Id <- NULL 
+head(BreastCancer)
+str(BreastCancer)
+df2 <- data.frame(sapply(BreastCancer[1:9], function(x) as.numeric(as.character(x))))
+z <- scale(df2[,1:9],center=TRUE,scale=TRUE)
+head(z)
+library(e1071)
+```
+
+```{r}
+#creating the test and train dataset
+set.seed(13)
+train.index <- sample(c(1:dim(BreastCancer)[1]), dim(BreastCancer)[1]*0.58)  
+valid.index <- setdiff(c(1:dim(BreastCancer)[1]), train.index)  
+train.df <- BreastCancer[train.index, ]
+valid.df <- BreastCancer[valid.index, ]
+```
+
+```{r}
+head(train.df)
+```
+
+```{r}
+#Support Vector Machine Model
+mysvm <- svm(Class ~ ., train.df)
+mysvm.pred <- predict(mysvm, valid.df)
+table(mysvm.pred,valid.df$Class)
+confusionMatrix(as.factor(mysvm.pred), as.factor(valid.df$Class), mode = "everything")
+```
+
+```{r}
+#Naive Bayes Model
+library(klaR)
+mynb <- NaiveBayes(Class ~ ., train.df)
+mynb.pred <- predict(mynb,valid.df)
+head(mynb.pred$class)
+table(mynb.pred$class,valid.df$Class)
+str(mysvm.pred)
+str(mynb.pred)
+confusionMatrix(mynb.pred$class,valid.df$Class, mode = "everything")
+```
+
+
+
+```{r}
+#Neural Network model
+library(nnet)
+library(neuralnet)
+str(BreastCancer)
+for (i in c(1:9)){
+BreastCancer[,i] <-(as.numeric(BreastCancer[,i])-min(as.numeric(BreastCancer[,i]))) /
+  (max(as.numeric(BreastCancer[,i]))-min(as.numeric(BreastCancer[,i])))
+}
+#recreating test and train with same seed
+set.seed(13)
+train.index <- sample(c(1:dim(BreastCancer)[1]), dim(BreastCancer)[1]*0.58)  
+valid.index <- setdiff(c(1:dim(BreastCancer)[1]), train.index)  
+train.df <- BreastCancer[train.index, ]
+valid.df <- BreastCancer[valid.index, ]
+
+mynnet <- neuralnet(Class ~ ., train.df, hidden=c(5,4))
+```
+
+
+```{r}
+#Neural Network Validation
+head(BreastCancer)
+str(mynnet)
+mynnet.pred <- predict(mynnet,valid.df,type="class")
+predicted.class=apply(mynnet.pred,1,which.max)-1
+table(as.factor(ifelse(predicted.class=="1", "malignant", "benign")),valid.df$Class)
+table(predicted.class,valid.df$Class)
+confusionMatrix(as.factor(ifelse(predicted.class=="1", "malignant", "benign")), valid.df$Class, mode = "everything")
+```
+
+
+
+```{r}
+#Decision tree Model
+library(MASS)
+#Decision trees
+library(rpart)
+mytree <- rpart(Class ~ ., train.df)
+plot(mytree); text(mytree) 
+summary(mytree)
+mytree.pred <- predict(mytree,valid.df,type="class")
+table(mytree.pred,valid.df$Class)
+confusionMatrix(as.factor(mytree.pred), as.factor(valid.df$Class), mode = "everything")
+```
+```{r}
+
+#Quadratic Discriminant Analysis
+library(MASS)
+library(MASS)
+myqda <- qda(Class ~ ., train.df)
+myqda.pred <- predict(myqda, valid.df)
+head(myqda.pred$class)
+table(myqda.pred$class,valid.df$Class)
+confusionMatrix(myqda.pred$class,valid.df$Class, mode = "everything")
+```
+```{r}
+#Regularised Discriminant Analysis
+library(klaR)
+myrda <- rda(Class ~ ., train.df)
+myrda.pred <- predict(myrda, valid.df)
+table(myrda.pred$class,valid.df$Class)
+confusionMatrix(myrda.pred$class,valid.df$Class, mode = "everything")
+```
+
+
+```{r}
+#Random Forests
+library(randomForest)
+myrf <- randomForest(Class ~ ., train.df)
+myrf.pred <- predict(myrf, valid.df)
+head(myrf.pred)
+table(myrf.pred, valid.df$Class)
+
+confusionMatrix(myrf.pred, valid.df$Class, mode = "everything")
+```
+
+
+```{r}
+#creating a new dataframe that consists of the validation predictions for all of the  above classifiers
+combine.classes<-data.frame(myrf.pred, myrda.pred$class,#myqda.pred, 
+                            mytree.pred,as.factor(ifelse(predicted.class=="1", "malignant", "benign")),mysvm.pred, mynb.pred$class)
+```
+
+
+```{r}
+head(combine.classes)
+```
+
+
+```{r}
+#If benign 0 if 1 malignant
+head(myrf.pred)
+head(myrda.pred)
+combine.classes$myrf.pred<-ifelse(combine.classes$myrf.pred=="benign", 0, 1)
+combine.classes[,2]<-ifelse(combine.classes[,2]=="benign", 0, 1)
+combine.classes[,3]<-ifelse(combine.classes[,3]=="benign", 0, 1)
+combine.classes[,4]<-ifelse(combine.classes[,4]=="benign", 0, 1)
+combine.classes[,5]<-ifelse(combine.classes[,5]=="benign", 0, 1)
+combine.classes[,6]<-ifelse(combine.classes[,6]=="benign", 0, 1)
+```
+
+
+```{r}
+#looking at the combined classes to make sure the 0 and 1 worked
+str(combine.classes)
+```
+
+
+```{r}
+combine.cl<-combine.classes[, -c(7,8)]
+majority.vote=rowSums(combine.classes[,-c(7,8)])
+```
+
+
+```{r}
+head(majority.vote,10)
+```
+
+
+```{r}
+#Goes through and assigns a malignant if more than 4 of the classifiers thought it was malignant and if not benign. Ends with ensemble confusion matrix
+combine.classes[,7]<-rowSums(combine.classes[,-c(7,8)])
+combine.classes[,8]<-ifelse(combine.classes[,7]>=4, "malignant", "benign")
+table(combine.classes[,8], valid.df$Class)
+confusionMatrix(as.factor(combine.classes[,8]), valid.df$Class, mode = "everything")
+
+```
+
